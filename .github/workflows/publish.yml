@@ -12,51 +12,47 @@ permissions:
 jobs:
   publish:
     runs-on: ubuntu-latest
-    # environment: release
+
+    defaults:
+      run:
+        shell: bash
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Setup .NET
-        uses: actions/setup-dotnet@v4
+        uses: actions/setup-dotnet@v5
         with:
           dotnet-version: '10.0.x'
 
       - name: Restore
-        run: dotnet restore
+        run: dotnet restore ./SchemaTrail/SchemaTrail.csproj
 
       - name: Build
-        run: dotnet build -c Release --no-restore
+        run: dotnet build ./SchemaTrail/SchemaTrail.csproj -c Release --no-restore
 
       - name: Pack
         run: |
           VERSION="${GITHUB_REF_NAME#v}"
-          dotnet pack ./SchemaTrail/SchemaTrail.csproj
-            -c Release
-            --no-build
-            -o ./artifacts
-            -p:PackageVersion=$VERSION
+          dotnet pack ./SchemaTrail/SchemaTrail.csproj -c Release --no-build -o ./artifacts -p:PackageVersion="$VERSION"
 
-      - name: NuGet login (OIDC)
+      - name: NuGet login
         id: login
         uses: NuGet/login@v1
         with:
           user: ${{ secrets.NUGET_USER }}
 
+      - name: List artifacts
+        run: ls -la ./artifacts
+
       - name: Push package
-        run: dotnet nuget push "./artifacts/*.nupkg"
-          --source "https://api.nuget.org/v3/index.json"
-          --api-key "${{ steps.login.outputs.NUGET_API_KEY }}"
-          --skip-duplicate
+        run: dotnet nuget push ./artifacts/*.nupkg --api-key "${{ steps.login.outputs.NUGET_API_KEY }}" --source https://www.nuget.org/api/v2/package --skip-duplicate
 
       - name: Push symbols
         run: |
-          shopt -s nullglob
-          files=(./artifacts/*.snupkg)
-          if [ ${#files[@]} -gt 0 ]; then
-            dotnet nuget push "./artifacts/*.snupkg"
-              --source "https://api.nuget.org/v3/index.json"
-              --api-key "${{ steps.login.outputs.NUGET_API_KEY }}"
-              --skip-duplicate
+          if compgen -G "./artifacts/*.snupkg" > /dev/null; then
+            dotnet nuget push ./artifacts/*.snupkg --api-key "${{ steps.login.outputs.NUGET_API_KEY }}" --source https://www.nuget.org/api/v2/package --skip-duplicate
+          else
+            echo "No .snupkg files found, skipping symbols push."
           fi
