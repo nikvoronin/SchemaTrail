@@ -16,6 +16,7 @@
     <Authors>Nikolai Voronin</Authors>
     <Description>A tiny, PostgreSQL-only SQL migration library for .NET.</Description>
 
+    <PackageReadmeFile>README.md</PackageReadmeFile>
     <PackageTags>efcore;postgresql;migrations</PackageTags>
     <PackageProjectUrl>https://github.com/nikvoronin/SchemaTrail</PackageProjectUrl>
     <RepositoryUrl>https://github.com/nikvoronin/SchemaTrail.git</RepositoryUrl>
@@ -27,6 +28,14 @@
     <IncludeSymbols>true</IncludeSymbols>
     <SymbolPackageFormat>snupkg</SymbolPackageFormat>
   </PropertyGroup>
+
+  <PropertyGroup Condition="'$(GITHUB_ACTIONS)' == 'true'">
+    <ContinuousIntegrationBuild>true</ContinuousIntegrationBuild>
+  </PropertyGroup>
+  
+  <ItemGroup>
+    <None Include="..\README.md" Pack="true" PackagePath="\"/>
+  </ItemGroup>
   
   <ItemGroup>
     <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="9.0.3" />
