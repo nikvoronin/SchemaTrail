@@ -1,0 +1,36 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <RootNamespace>SchemaTrail</RootNamespace>
+    <AssemblyName>SchemaTrail</AssemblyName>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <PackageId>SchemaTrail</PackageId>
+    <Version>0.1.0</Version>
+    <Authors>Nikolai Voronin</Authors>
+    <Description>Library for database migrations with PostgreSQL and EF Core.</Description>
+
+    <PackageTags>efcore;postgresql;migrations</PackageTags>
+    <PackageProjectUrl>https://github.com/nikvoronin/SchemaTrail</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/nikvoronin/SchemaTrail.git</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+
+    <PackageReleaseNotes>Initial release.</PackageReleaseNotes>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <IncludeSymbols>true</IncludeSymbols>
+    <SymbolPackageFormat>snupkg</SymbolPackageFormat>
+  </PropertyGroup>
+  
+  <ItemGroup>
+    <PackageReference Include="EFCore.NamingConventions" Version="9.0.0" />
+    <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="9.0.3" />
+  </ItemGroup>
+
+</Project>
