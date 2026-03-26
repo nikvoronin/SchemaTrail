@@ -3,7 +3,6 @@ using Microsoft.Extensions.Logging;
 using SchemaTrail.Abstractions;
 using SchemaTrail.Models;
 using System;
-using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -13,7 +12,7 @@ namespace SchemaTrail;
 /// <summary>
 /// Manages migration run records and performs recovery of unfinished migration runs.
 /// </summary>
-public sealed class MigrationRunService : IMigrationRunService
+public sealed partial class MigrationRunService : IMigrationRunService
 {
     /// <summary>
     /// Initializes a new instance of the <see cref="MigrationRunService"/> class.
@@ -90,131 +89,6 @@ public sealed class MigrationRunService : IMigrationRunService
                 runId,
                 status );
         }
-    }
-
-    /// <inheritdoc />
-    public async Task RecoverDanglingRunsAsync(
-        MigrationsDbContext context,
-        Dictionary<int, AppliedMigration> appliedMigrations,
-        CancellationToken token )
-    {
-        ArgumentNullException.ThrowIfNull( context );
-        ArgumentNullException.ThrowIfNull( appliedMigrations );
-
-        var danglingRuns = await context.MigrationRuns
-            .AsNoTracking()
-            .Where( x =>
-                x.Status == MigrationRunStatuses.Running
-                && x.CompletedAt == null )
-            .OrderBy( x => x.Version )
-            .ThenBy( x => x.StartedAt )
-            .ThenBy( x => x.Id )
-            .Select( x =>
-                new MigrationRunRecord(
-                    x.Id,
-                    x.Version,
-                    x.ScriptName,
-                    x.Description,
-                    x.Checksum,
-                    x.StartedAt ) )
-            .ToListAsync( token );
-
-        if (danglingRuns.Count == 0) {
-            return;
-        }
-
-        var recoveredCount = 0;
-
-        foreach (var group in danglingRuns.GroupBy( x => x.Version ).OrderBy( x => x.Key )) {
-            var runs = group
-                .OrderByDescending( x => x.StartedAt )
-                .ThenByDescending( x => x.Id )
-                .ToArray();
-
-            if (appliedMigrations.TryGetValue( group.Key, out var applied )) {
-                var successCandidate =
-                    runs.FirstOrDefault( x =>
-                        string.Equals(
-                            x.ScriptName,
-                            applied.ScriptName,
-                            StringComparison.Ordinal )
-                        && string.Equals(
-                            x.Description,
-                            applied.Description,
-                            StringComparison.Ordinal )
-                        && string.Equals(
-                            x.Checksum,
-                            applied.Checksum,
-                            StringComparison.Ordinal ) );
-
-                if (successCandidate is not null) {
-                    var successCompletedAt =
-                        applied.AppliedAt >= successCandidate.StartedAt
-                            ? applied.AppliedAt
-                            : DateTimeOffset.UtcNow;
-
-                    var successDuration = successCompletedAt - successCandidate.StartedAt;
-                    if (successDuration < TimeSpan.Zero) {
-                        successDuration = TimeSpan.Zero;
-                    }
-
-                    await CompleteRecoveredAsync(
-                        context,
-                        successCandidate.Id,
-                        MigrationRunStatuses.Success,
-                        successCompletedAt,
-                        successDuration,
-                        "Recovered on startup after unexpected process termination.",
-                        token );
-
-                    recoveredCount++;
-
-                    foreach (var staleRun in runs.Where( x => x.Id != successCandidate.Id )) {
-                        var failedCompletedAt = DateTimeOffset.UtcNow;
-                        var failedDuration = failedCompletedAt - staleRun.StartedAt;
-                        if (failedDuration < TimeSpan.Zero) {
-                            failedDuration = TimeSpan.Zero;
-                        }
-
-                        await CompleteRecoveredAsync(
-                            context,
-                            staleRun.Id,
-                            MigrationRunStatuses.Failed,
-                            failedCompletedAt,
-                            failedDuration,
-                            "Marked as failed during recovery because another run for the same migration was reconciled as successful.",
-                            token );
-
-                        recoveredCount++;
-                    }
-
-                    continue;
-                }
-            }
-
-            foreach (var run in runs) {
-                var completedAt = DateTimeOffset.UtcNow;
-                var duration = completedAt - run.StartedAt;
-                if (duration < TimeSpan.Zero) {
-                    duration = TimeSpan.Zero;
-                }
-
-                await CompleteRecoveredAsync(
-                    context,
-                    run.Id,
-                    MigrationRunStatuses.Failed,
-                    completedAt,
-                    duration,
-                    "Recovered on startup after unexpected process termination before migration completion.",
-                    token );
-
-                recoveredCount++;
-            }
-        }
-
-        _logger.LogWarning(
-            "Recovered {RecoveredCount} dangling migration run records",
-            recoveredCount );
     }
 
     /// <summary>
