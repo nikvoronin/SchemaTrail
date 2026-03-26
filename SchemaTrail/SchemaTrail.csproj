@@ -14,7 +14,7 @@
     <PackageId>SchemaTrail</PackageId>
     <Version>0.1.0</Version>
     <Authors>Nikolai Voronin</Authors>
-    <Description>Library for database migrations with PostgreSQL and EF Core.</Description>
+    <Description>A tiny, PostgreSQL-only SQL migration library for .NET.</Description>
 
     <PackageTags>efcore;postgresql;migrations</PackageTags>
     <PackageProjectUrl>https://github.com/nikvoronin/SchemaTrail</PackageProjectUrl>
@@ -29,7 +29,6 @@
   </PropertyGroup>
   
   <ItemGroup>
-    <PackageReference Include="EFCore.NamingConventions" Version="9.0.0" />
     <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="9.0.3" />
   </ItemGroup>
 
