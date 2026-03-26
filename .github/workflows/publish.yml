@@ -32,10 +32,10 @@ jobs:
       - name: Pack
         run: |
           VERSION="${GITHUB_REF_NAME#v}"
-          dotnet pack ./SchemaTrail/SchemaTrail.csproj \
-            -c Release \
-            --no-build \
-            -o ./artifacts \
+          dotnet pack ./SchemaTrail/SchemaTrail.csproj
+            -c Release
+            --no-build
+            -o ./artifacts
             -p:PackageVersion=$VERSION
 
       - name: NuGet login (OIDC)
@@ -45,9 +45,9 @@ jobs:
           user: ${{ secrets.NUGET_USER }}
 
       - name: Push package
-        run: dotnet nuget push "./artifacts/*.nupkg" \
-          --source "https://api.nuget.org/v3/index.json" \
-          --api-key "${{ steps.login.outputs.NUGET_API_KEY }}" \
+        run: dotnet nuget push "./artifacts/*.nupkg"
+          --source "https://api.nuget.org/v3/index.json"
+          --api-key "${{ steps.login.outputs.NUGET_API_KEY }}"
           --skip-duplicate
 
       - name: Push symbols
@@ -55,8 +55,8 @@ jobs:
           shopt -s nullglob
           files=(./artifacts/*.snupkg)
           if [ ${#files[@]} -gt 0 ]; then
-            dotnet nuget push "./artifacts/*.snupkg" \
-              --source "https://api.nuget.org/v3/index.json" \
-              --api-key "${{ steps.login.outputs.NUGET_API_KEY }}" \
+            dotnet nuget push "./artifacts/*.snupkg"
+              --source "https://api.nuget.org/v3/index.json"
+              --api-key "${{ steps.login.outputs.NUGET_API_KEY }}"
               --skip-duplicate
           fi
