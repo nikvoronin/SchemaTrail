@@ -2,7 +2,7 @@
 
 A tiny, PostgreSQL-only SQL migration library for .NET.
 
-> [!NOTICE]
+> [!NOTE]
 > **SchemaTrail** is intentionally small and opinionated. If you want a more powerful production-grade migration solution, use [DbUp](https://github.com/dbup/dbup) or [FluentMigrator](https://github.com/fluentmigrator/fluentmigrator) instead.
 
 **SchemaTrail** is built for developers that want migrations to stay simple, explicit, and reviewable:
