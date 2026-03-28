@@ -41,11 +41,12 @@ public partial class FileSystemSqlScriptsProvider : ISqlScriptsProvider
         var scripts = new List<SqlScriptMigration>();
 
         foreach (var fileName in files) {
-            var match = _fileNameRegex.Match( fileName );
+            var fileNameOnly = Path.GetFileName(fileName);
+            var match = _fileNameRegex.Match( fileNameOnly );
 
             if (!match.Success) {
                 throw new InvalidOperationException(
-                    $"Invalid migration file name '{fileName}'." );
+                    $"Invalid migration file name '{fileNameOnly}'." );
             }
 
             var version = int.Parse( match.Groups["version"].Value );
@@ -57,7 +58,7 @@ public partial class FileSystemSqlScriptsProvider : ISqlScriptsProvider
             scripts.Add(
                 new SqlScriptMigration(
                     version, 
-                    fileName, 
+                    fileNameOnly, 
                     description,
                     sql) );
         }
