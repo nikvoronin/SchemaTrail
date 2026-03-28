@@ -12,7 +12,7 @@
 
   <PropertyGroup>
     <PackageId>SchemaTrail</PackageId>
-    <Version>0.1.0</Version>
+    <Version>0.1.5</Version>
     <Authors>Nikolai Voronin</Authors>
     <Description>A tiny, PostgreSQL-only SQL migration library for .NET.</Description>
 
@@ -23,7 +23,7 @@
     <RepositoryType>git</RepositoryType>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
 
-    <PackageReleaseNotes>Initial release.</PackageReleaseNotes>
+    <PackageReleaseNotes>Fix file-based provider.</PackageReleaseNotes>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <IncludeSymbols>true</IncludeSymbols>
     <SymbolPackageFormat>snupkg</SymbolPackageFormat>
@@ -38,7 +38,7 @@
   </ItemGroup>
   
   <ItemGroup>
-    <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="9.0.3" />
+    <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.1" />
   </ItemGroup>
 
 </Project>
