@@ -17,11 +17,15 @@ public interface IMigrationRunService
     /// </summary>
     /// <param name="context">The database context used to access migration run storage.</param>
     /// <param name="script">The migration script for which the run record is created.</param>
+    /// <param name="direction">
+    /// The run direction, one of the <see cref="MigrationRunDirections"/> values.
+    /// </param>
     /// <param name="token">The cancellation token.</param>
     /// <returns>The identifier of the created migration run record.</returns>
     Task<long> InsertStartedAsync(
         MigrationsDbContext context,
         SqlScriptMigration script,
+        string direction,
         CancellationToken token );
 
     /// <summary>

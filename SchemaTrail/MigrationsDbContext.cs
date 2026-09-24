@@ -58,11 +58,6 @@ public sealed class MigrationsDbContext(
             .HasColumnType( "text" )
             .IsRequired();
 
-        entity.Property( x => x.Checksum )
-            .HasColumnName( "checksum" )
-            .HasColumnType( "text" )
-            .IsRequired();
-
         entity.Property( x => x.AppliedAt )
             .HasColumnName( "applied_at" )
             .HasColumnType( "timestamp with time zone" )
@@ -82,7 +77,11 @@ public sealed class MigrationsDbContext(
             tableBuilder => {
                 tableBuilder.HasCheckConstraint(
                     $"ck_{STORAGE_MIGRATION_TABLENAME}_runs_status",
-                    "status in ('running', 'success', 'failed')" );
+                    "status in ('running', 'success', 'failed', 'rolled_back')" );
+
+                tableBuilder.HasCheckConstraint(
+                    $"ck_{STORAGE_MIGRATION_TABLENAME}_runs_direction",
+                    "direction in ('up', 'down')" );
             } );
 
         entity.HasKey( x => x.Id )
@@ -105,14 +104,15 @@ public sealed class MigrationsDbContext(
             .HasColumnType( "text" )
             .IsRequired();
 
-        entity.Property( x => x.Checksum )
-            .HasColumnName( "checksum" )
-            .HasColumnType( "text" )
-            .IsRequired();
-
         entity.Property( x => x.Status )
             .HasColumnName( "status" )
             .HasColumnType( "text" )
+            .IsRequired();
+
+        entity.Property( x => x.Direction )
+            .HasColumnName( "direction" )
+            .HasColumnType( "text" )
+            .HasDefaultValue( MigrationRunDirections.Up )
             .IsRequired();
 
         entity.Property( x => x.StartedAt )

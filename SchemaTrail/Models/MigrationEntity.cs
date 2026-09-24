@@ -10,7 +10,5 @@ public sealed class MigrationEntity
 
     public required string Description { get; set; }
 
-    public required string Checksum { get; set; }
-
     public DateTimeOffset AppliedAt { get; set; }
 }

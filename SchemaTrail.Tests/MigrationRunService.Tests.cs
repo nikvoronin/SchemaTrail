@@ -43,10 +43,10 @@ public class MigrationRunServiceTests
             .Options;
         using var context = new MigrationsDbContext(options);
 
-        var script = new SqlScriptMigration(1, "V001__Init.sql", "Init", "CREATE TABLE test;");
+        var script = new SqlScriptMigration(1, "V001__Init.up.sql", "Init", "CREATE TABLE test;", "V001__Init.down.sql", "DROP TABLE test;");
 
         // Act
-        var id = await _service.InsertStartedAsync(context, script, CancellationToken.None);
+        var id = await _service.InsertStartedAsync(context, script, MigrationRunDirections.Up, CancellationToken.None);
 
         // Assert
         id.Should().BeGreaterThan(0);
@@ -54,11 +54,49 @@ public class MigrationRunServiceTests
         var entity = await context.MigrationRuns.FindAsync(id);
         entity.Should().NotBeNull();
         entity!.Version.Should().Be(1);
-        entity.ScriptName.Should().Be("V001__Init.sql");
+        entity.ScriptName.Should().Be("V001__Init.up.sql");
         entity.Description.Should().Be("Init");
-        entity.Checksum.Should().Be(script.Checksum);
         entity.Status.Should().Be(MigrationRunStatuses.Running);
+        entity.Direction.Should().Be(MigrationRunDirections.Up);
         entity.CompletedAt.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task InsertStartedAsync_WithDownDirection_InsertsWithDownDirection()
+    {
+        // Arrange
+        var options = new DbContextOptionsBuilder<MigrationsDbContext>()
+            .UseInMemoryDatabase(databaseName: Guid.NewGuid().ToString())
+            .Options;
+        using var context = new MigrationsDbContext(options);
+
+        var script = new SqlScriptMigration(1, "V001__Init.up.sql", "Init", "CREATE TABLE test;", "V001__Init.down.sql", "DROP TABLE test;");
+
+        // Act
+        var id = await _service.InsertStartedAsync(context, script, MigrationRunDirections.Down, CancellationToken.None);
+
+        // Assert
+        var entity = await context.MigrationRuns.FindAsync(id);
+        entity.Should().NotBeNull();
+        entity!.Direction.Should().Be(MigrationRunDirections.Down);
+    }
+
+    [Fact]
+    public async Task InsertStartedAsync_WithNullDirection_ThrowsArgumentException()
+    {
+        // Arrange
+        var options = new DbContextOptionsBuilder<MigrationsDbContext>()
+            .UseInMemoryDatabase(databaseName: Guid.NewGuid().ToString())
+            .Options;
+        using var context = new MigrationsDbContext(options);
+        var script = new SqlScriptMigration(1, "V001__Init.up.sql", "Init", "CREATE TABLE test;", "V001__Init.down.sql", "DROP TABLE test;");
+        string direction = null!;
+
+        // Act
+        Func<Task> act = () => _service.InsertStartedAsync(context, script, direction, CancellationToken.None);
+
+        // Assert
+        await act.Should().ThrowAsync<ArgumentException>().WithParameterName("direction");
     }
 
     [Fact]
@@ -66,10 +104,10 @@ public class MigrationRunServiceTests
     {
         // Arrange
         MigrationsDbContext context = null!;
-        var script = new SqlScriptMigration(1, "V001__Init.sql", "Init", "CREATE TABLE test;");
+        var script = new SqlScriptMigration(1, "V001__Init.up.sql", "Init", "CREATE TABLE test;", "V001__Init.down.sql", "DROP TABLE test;");
 
         // Act
-        Func<Task> act = () => _service.InsertStartedAsync(context, script, CancellationToken.None);
+        Func<Task> act = () => _service.InsertStartedAsync(context, script, MigrationRunDirections.Up, CancellationToken.None);
 
         // Assert
         await act.Should().ThrowAsync<ArgumentNullException>().WithParameterName("context");
@@ -86,7 +124,7 @@ public class MigrationRunServiceTests
         SqlScriptMigration script = null!;
 
         // Act
-        Func<Task> act = () => _service.InsertStartedAsync(context, script, CancellationToken.None);
+        Func<Task> act = () => _service.InsertStartedAsync(context, script, MigrationRunDirections.Up, CancellationToken.None);
 
         // Assert
         await act.Should().ThrowAsync<ArgumentNullException>().WithParameterName("script");
@@ -101,8 +139,8 @@ public class MigrationRunServiceTests
             .Options;
         using var context = new MigrationsDbContext(options);
 
-        var script = new SqlScriptMigration(1, "V001__Init.sql", "Init", "CREATE TABLE test;");
-        var id = await _service.InsertStartedAsync(context, script, CancellationToken.None);
+        var script = new SqlScriptMigration(1, "V001__Init.up.sql", "Init", "CREATE TABLE test;", "V001__Init.down.sql", "DROP TABLE test;");
+        var id = await _service.InsertStartedAsync(context, script, MigrationRunDirections.Up, CancellationToken.None);
 
         var completedAt = DateTimeOffset.UtcNow;
         var duration = TimeSpan.FromSeconds(5);

@@ -32,7 +32,6 @@ public sealed class MigrationExecutionService : IMigrationExecutionService
                 version integer not null primary key,
                 script_name text not null unique,
                 description text not null,
-                checksum text not null,
                 applied_at timestamp with time zone not null default (now() at time zone 'utc')
             );
 
@@ -42,14 +41,16 @@ public sealed class MigrationExecutionService : IMigrationExecutionService
                 version integer not null,
                 script_name text not null,
                 description text not null,
-                checksum text not null,
                 status text not null,
+                direction text not null default 'up',
                 started_at timestamp with time zone not null,
                 completed_at timestamp with time zone null,
                 duration_ms bigint null,
                 error_text text null,
                 constraint ck_{migrationTableName}_runs_status
-                    check (status in ('running', 'success', 'failed'))
+                    check (status in ('running', 'success', 'failed', 'rolled_back')),
+                constraint ck_{migrationTableName}_runs_direction
+                    check (direction in ('up', 'down'))
             );
 
             create index if not exists ix_{migrationTableName}_runs_version_started_at
@@ -57,6 +58,29 @@ public sealed class MigrationExecutionService : IMigrationExecutionService
 
             create index if not exists ix_{migrationTableName}_script_name
                 on {migrationTableName} (script_name);
+
+            alter table {migrationTableName}_runs
+                add column if not exists direction text not null default 'up';
+
+            alter table {migrationTableName}
+                drop column if exists checksum;
+
+            alter table {migrationTableName}_runs
+                drop column if exists checksum;
+
+            alter table {migrationTableName}_runs
+                drop constraint if exists ck_{migrationTableName}_runs_status;
+
+            alter table {migrationTableName}_runs
+                add constraint ck_{migrationTableName}_runs_status
+                    check (status in ('running', 'success', 'failed', 'rolled_back'));
+
+            alter table {migrationTableName}_runs
+                drop constraint if exists ck_{migrationTableName}_runs_direction;
+
+            alter table {migrationTableName}_runs
+                add constraint ck_{migrationTableName}_runs_direction
+                    check (direction in ('up', 'down'));
             """;
 
         await context.Database.ExecuteSqlRawAsync( sql, token );
@@ -78,7 +102,6 @@ public sealed class MigrationExecutionService : IMigrationExecutionService
                     x.Version,
                     x.ScriptName,
                     x.Description,
-                    x.Checksum,
                     x.AppliedAt ),
                 token );
     }
@@ -113,12 +136,6 @@ public sealed class MigrationExecutionService : IMigrationExecutionService
                     $"Migration V{version:D3} was already applied with description '{applied.Description}', "
                     + $"but current build contains description '{currentScript.Description}'." );
             }
-
-            if (!string.Equals( applied.Checksum, currentScript.Checksum, StringComparison.Ordinal )) {
-                throw new InvalidOperationException(
-                    $"Checksum mismatch detected for migration V{version:D3} ({currentScript.ScriptName}). "
-                    + "The migration has already been applied, but its SQL content has been changed." );
-            }
         }
     }
 
@@ -144,7 +161,6 @@ public sealed class MigrationExecutionService : IMigrationExecutionService
                     Version = script.Version,
                     ScriptName = script.ScriptName,
                     Description = script.Description,
-                    Checksum = script.Checksum,
                     AppliedAt = appliedAt,
                 } );
 
@@ -154,6 +170,45 @@ public sealed class MigrationExecutionService : IMigrationExecutionService
             context.ChangeTracker.Clear();
 
             return appliedAt;
+        }
+        catch {
+            await transaction.RollbackAsync( CancellationToken.None );
+            context.ChangeTracker.Clear();
+            throw;
+        }
+    }
+
+    /// <inheritdoc />
+    public async Task<DateTimeOffset> RevertSingleMigrationAsync(
+        MigrationsDbContext context,
+        SqlScriptMigration script,
+        CancellationToken token )
+    {
+        ArgumentNullException.ThrowIfNull( context );
+        ArgumentNullException.ThrowIfNull( script );
+
+        await using var transaction =
+            await context.Database.BeginTransactionAsync( IsolationLevel.ReadCommitted, token );
+
+        try {
+            await context.Database.ExecuteSqlRawAsync( script.DownSql, token );
+
+            var revertedAt = DateTimeOffset.UtcNow;
+
+            context.AppliedMigrations.Remove(
+                new MigrationEntity {
+                    Version = script.Version,
+                    ScriptName = script.ScriptName,
+                    Description = script.Description,
+                    AppliedAt = revertedAt,
+                } );
+
+            await context.SaveChangesAsync( token );
+            await transaction.CommitAsync( token );
+
+            context.ChangeTracker.Clear();
+
+            return revertedAt;
         }
         catch {
             await transaction.RollbackAsync( CancellationToken.None );

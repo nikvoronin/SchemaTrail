@@ -1,8 +1,6 @@
-﻿namespace SchemaTrail.Models;
+namespace SchemaTrail.Models;
 
 using System;
-using System.Security.Cryptography;
-using System.Text;
 
 /// <summary>
 /// Represents a SQL script-based migration.
@@ -25,14 +23,19 @@ public sealed partial class SqlScriptMigration
     public string Description { get; }
 
     /// <summary>
-    /// Gets the checksum calculated from the SQL script content.
-    /// </summary>
-    public string Checksum { get; }
-
-    /// <summary>
-    /// Gets the SQL script content.
+    /// Gets the SQL script content that applies the migration.
     /// </summary>
     public string Sql { get; }
+
+    /// <summary>
+    /// Gets the down-migration script file name.
+    /// </summary>
+    public string DownScriptName { get; }
+
+    /// <summary>
+    /// Gets the SQL script content that reverts the migration.
+    /// </summary>
+    public string DownSql { get; }
 
     /// <summary>
     /// Initializes a new instance of the <see cref="SqlScriptMigration"/> class.
@@ -41,36 +44,39 @@ public sealed partial class SqlScriptMigration
     /// The migration version.
     /// </param>
     /// <param name="scriptName">
-    /// The script file name.
+    /// The up-migration script file name.
     /// </param>
     /// <param name="description">
     /// The migration description.
     /// </param>
     /// <param name="sql">
-    /// The SQL script content.
+    /// The SQL script content that applies the migration.
+    /// </param>
+    /// <param name="downScriptName">
+    /// The down-migration script file name.
+    /// </param>
+    /// <param name="downSql">
+    /// The SQL script content that reverts the migration.
     /// </param>
     public SqlScriptMigration(
         int version,
         string scriptName,
         string description,
-        string sql )
+        string sql,
+        string downScriptName,
+        string downSql )
     {
         ArgumentException.ThrowIfNullOrWhiteSpace( scriptName );
         ArgumentException.ThrowIfNullOrWhiteSpace( description );
         ArgumentException.ThrowIfNullOrWhiteSpace( sql );
+        ArgumentException.ThrowIfNullOrWhiteSpace( downScriptName );
+        ArgumentException.ThrowIfNullOrWhiteSpace( downSql );
 
         Version = version;
         ScriptName = scriptName;
         Description = description;
-        Checksum = CalculateChecksum( sql );
         Sql = sql;
-    }
-
-    private static string CalculateChecksum( string sql )
-    {
-        var bytes = Encoding.UTF8.GetBytes( sql );
-        var hash = SHA256.HashData( bytes );
-
-        return Convert.ToHexString( hash );
+        DownScriptName = downScriptName;
+        DownSql = downSql;
     }
 }

@@ -28,17 +28,19 @@ public sealed partial class MigrationRunService : IMigrationRunService
     public async Task<long> InsertStartedAsync(
         MigrationsDbContext context,
         SqlScriptMigration script,
+        string direction,
         CancellationToken token )
     {
         ArgumentNullException.ThrowIfNull( context );
         ArgumentNullException.ThrowIfNull( script );
+        ArgumentException.ThrowIfNullOrWhiteSpace( direction );
 
         var entity = new MigrationRunEntity {
             Version = script.Version,
             ScriptName = script.ScriptName,
             Description = script.Description,
-            Checksum = script.Checksum,
             Status = MigrationRunStatuses.Running,
+            Direction = direction,
             StartedAt = DateTimeOffset.UtcNow,
         };
 

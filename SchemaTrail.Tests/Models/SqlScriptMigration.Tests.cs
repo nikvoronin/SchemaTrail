@@ -12,19 +12,22 @@ public class SqlScriptMigrationTests
     {
         // Arrange
         int version = 1;
-        string scriptName = "V001__Init.sql";
+        string scriptName = "V001__Init.up.sql";
         string description = "Init";
         string sql = "CREATE TABLE test;";
+        string downScriptName = "V001__Init.down.sql";
+        string downSql = "DROP TABLE test;";
 
         // Act
-        var migration = new SqlScriptMigration(version, scriptName, description, sql);
+        var migration = new SqlScriptMigration(version, scriptName, description, sql, downScriptName, downSql);
 
         // Assert
         migration.Version.Should().Be(version);
         migration.ScriptName.Should().Be(scriptName);
         migration.Description.Should().Be(description);
         migration.Sql.Should().Be(sql);
-        migration.Checksum.Should().NotBeNullOrEmpty();
+        migration.DownScriptName.Should().Be(downScriptName);
+        migration.DownSql.Should().Be(downSql);
     }
 
     [Fact]
@@ -35,9 +38,11 @@ public class SqlScriptMigrationTests
         string scriptName = null!;
         string description = "Init";
         string sql = "CREATE TABLE test;";
+        string downScriptName = "V001__Init.down.sql";
+        string downSql = "DROP TABLE test;";
 
         // Act
-        Action act = () => new SqlScriptMigration(version, scriptName, description, sql);
+        Action act = () => new SqlScriptMigration(version, scriptName, description, sql, downScriptName, downSql);
 
         // Assert
         act.Should().Throw<ArgumentException>().WithParameterName("scriptName");
@@ -51,9 +56,11 @@ public class SqlScriptMigrationTests
         string scriptName = "";
         string description = "Init";
         string sql = "CREATE TABLE test;";
+        string downScriptName = "V001__Init.down.sql";
+        string downSql = "DROP TABLE test;";
 
         // Act
-        Action act = () => new SqlScriptMigration(version, scriptName, description, sql);
+        Action act = () => new SqlScriptMigration(version, scriptName, description, sql, downScriptName, downSql);
 
         // Assert
         act.Should().Throw<ArgumentException>().WithParameterName("scriptName");
@@ -67,9 +74,11 @@ public class SqlScriptMigrationTests
         string scriptName = "   ";
         string description = "Init";
         string sql = "CREATE TABLE test;";
+        string downScriptName = "V001__Init.down.sql";
+        string downSql = "DROP TABLE test;";
 
         // Act
-        Action act = () => new SqlScriptMigration(version, scriptName, description, sql);
+        Action act = () => new SqlScriptMigration(version, scriptName, description, sql, downScriptName, downSql);
 
         // Assert
         act.Should().Throw<ArgumentException>().WithParameterName("scriptName");
@@ -80,12 +89,14 @@ public class SqlScriptMigrationTests
     {
         // Arrange
         int version = 1;
-        string scriptName = "V001__Init.sql";
+        string scriptName = "V001__Init.up.sql";
         string description = null!;
         string sql = "CREATE TABLE test;";
+        string downScriptName = "V001__Init.down.sql";
+        string downSql = "DROP TABLE test;";
 
         // Act
-        Action act = () => new SqlScriptMigration(version, scriptName, description, sql);
+        Action act = () => new SqlScriptMigration(version, scriptName, description, sql, downScriptName, downSql);
 
         // Assert
         act.Should().Throw<ArgumentException>().WithParameterName("description");
@@ -96,12 +107,14 @@ public class SqlScriptMigrationTests
     {
         // Arrange
         int version = 1;
-        string scriptName = "V001__Init.sql";
+        string scriptName = "V001__Init.up.sql";
         string description = "";
         string sql = "CREATE TABLE test;";
+        string downScriptName = "V001__Init.down.sql";
+        string downSql = "DROP TABLE test;";
 
         // Act
-        Action act = () => new SqlScriptMigration(version, scriptName, description, sql);
+        Action act = () => new SqlScriptMigration(version, scriptName, description, sql, downScriptName, downSql);
 
         // Assert
         act.Should().Throw<ArgumentException>().WithParameterName("description");
@@ -112,12 +125,14 @@ public class SqlScriptMigrationTests
     {
         // Arrange
         int version = 1;
-        string scriptName = "V001__Init.sql";
+        string scriptName = "V001__Init.up.sql";
         string description = "   ";
         string sql = "CREATE TABLE test;";
+        string downScriptName = "V001__Init.down.sql";
+        string downSql = "DROP TABLE test;";
 
         // Act
-        Action act = () => new SqlScriptMigration(version, scriptName, description, sql);
+        Action act = () => new SqlScriptMigration(version, scriptName, description, sql, downScriptName, downSql);
 
         // Assert
         act.Should().Throw<ArgumentException>().WithParameterName("description");
@@ -128,12 +143,14 @@ public class SqlScriptMigrationTests
     {
         // Arrange
         int version = 1;
-        string scriptName = "V001__Init.sql";
+        string scriptName = "V001__Init.up.sql";
         string description = "Init";
         string sql = null!;
+        string downScriptName = "V001__Init.down.sql";
+        string downSql = "DROP TABLE test;";
 
         // Act
-        Action act = () => new SqlScriptMigration(version, scriptName, description, sql);
+        Action act = () => new SqlScriptMigration(version, scriptName, description, sql, downScriptName, downSql);
 
         // Assert
         act.Should().Throw<ArgumentException>().WithParameterName("sql");
@@ -144,12 +161,14 @@ public class SqlScriptMigrationTests
     {
         // Arrange
         int version = 1;
-        string scriptName = "V001__Init.sql";
+        string scriptName = "V001__Init.up.sql";
         string description = "Init";
         string sql = "";
+        string downScriptName = "V001__Init.down.sql";
+        string downSql = "DROP TABLE test;";
 
         // Act
-        Action act = () => new SqlScriptMigration(version, scriptName, description, sql);
+        Action act = () => new SqlScriptMigration(version, scriptName, description, sql, downScriptName, downSql);
 
         // Assert
         act.Should().Throw<ArgumentException>().WithParameterName("sql");
@@ -160,29 +179,88 @@ public class SqlScriptMigrationTests
     {
         // Arrange
         int version = 1;
-        string scriptName = "V001__Init.sql";
+        string scriptName = "V001__Init.up.sql";
         string description = "Init";
         string sql = "   ";
+        string downScriptName = "V001__Init.down.sql";
+        string downSql = "DROP TABLE test;";
 
         // Act
-        Action act = () => new SqlScriptMigration(version, scriptName, description, sql);
+        Action act = () => new SqlScriptMigration(version, scriptName, description, sql, downScriptName, downSql);
 
         // Assert
         act.Should().Throw<ArgumentException>().WithParameterName("sql");
     }
 
     [Fact]
-    public void Checksum_IsCalculatedCorrectly()
+    public void Constructor_WithNullDownScriptName_ThrowsArgumentException()
     {
         // Arrange
-        string sql = "SELECT 1;";
-        var migration = new SqlScriptMigration(1, "V001__Init.sql", "Init", sql);
+        int version = 1;
+        string scriptName = "V001__Init.up.sql";
+        string description = "Init";
+        string sql = "CREATE TABLE test;";
+        string downScriptName = null!;
+        string downSql = "DROP TABLE test;";
 
         // Act
-        var checksum = migration.Checksum;
+        Action act = () => new SqlScriptMigration(version, scriptName, description, sql, downScriptName, downSql);
 
         // Assert
-        checksum.Should().NotBeNullOrEmpty();
-        checksum.Length.Should().Be(64); // SHA256 hex length
+        act.Should().Throw<ArgumentException>().WithParameterName("downScriptName");
+    }
+
+    [Fact]
+    public void Constructor_WithWhitespaceDownScriptName_ThrowsArgumentException()
+    {
+        // Arrange
+        int version = 1;
+        string scriptName = "V001__Init.up.sql";
+        string description = "Init";
+        string sql = "CREATE TABLE test;";
+        string downScriptName = "   ";
+        string downSql = "DROP TABLE test;";
+
+        // Act
+        Action act = () => new SqlScriptMigration(version, scriptName, description, sql, downScriptName, downSql);
+
+        // Assert
+        act.Should().Throw<ArgumentException>().WithParameterName("downScriptName");
+    }
+
+    [Fact]
+    public void Constructor_WithNullDownSql_ThrowsArgumentException()
+    {
+        // Arrange
+        int version = 1;
+        string scriptName = "V001__Init.up.sql";
+        string description = "Init";
+        string sql = "CREATE TABLE test;";
+        string downScriptName = "V001__Init.down.sql";
+        string downSql = null!;
+
+        // Act
+        Action act = () => new SqlScriptMigration(version, scriptName, description, sql, downScriptName, downSql);
+
+        // Assert
+        act.Should().Throw<ArgumentException>().WithParameterName("downSql");
+    }
+
+    [Fact]
+    public void Constructor_WithWhitespaceDownSql_ThrowsArgumentException()
+    {
+        // Arrange
+        int version = 1;
+        string scriptName = "V001__Init.up.sql";
+        string description = "Init";
+        string sql = "CREATE TABLE test;";
+        string downScriptName = "V001__Init.down.sql";
+        string downSql = "   ";
+
+        // Act
+        Action act = () => new SqlScriptMigration(version, scriptName, description, sql, downScriptName, downSql);
+
+        // Assert
+        act.Should().Throw<ArgumentException>().WithParameterName("downSql");
     }
 }

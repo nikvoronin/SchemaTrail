@@ -55,10 +55,10 @@ public class FileSystemSqlScriptsProviderTests : IDisposable
     public void GetMigrationScripts_WithValidFiles_ReturnsOrderedScripts()
     {
         // Arrange
-        var file1 = Path.Combine(_tempDirectory, "V001__Init.sql");
-        var file2 = Path.Combine(_tempDirectory, "V002__Create_users_table.sql");
-        File.WriteAllText(file1, "CREATE TABLE test;");
-        File.WriteAllText(file2, "CREATE TABLE users;");
+        File.WriteAllText(Path.Combine(_tempDirectory, "V001__Init.up.sql"), "CREATE TABLE test;");
+        File.WriteAllText(Path.Combine(_tempDirectory, "V001__Init.down.sql"), "DROP TABLE test;");
+        File.WriteAllText(Path.Combine(_tempDirectory, "V002__Create_users_table.up.sql"), "CREATE TABLE users;");
+        File.WriteAllText(Path.Combine(_tempDirectory, "V002__Create_users_table.down.sql"), "DROP TABLE users;");
 
         var provider = new FileSystemSqlScriptsProvider(_tempDirectory);
 
@@ -68,12 +68,16 @@ public class FileSystemSqlScriptsProviderTests : IDisposable
         // Assert
         scripts.Should().HaveCount(2);
         scripts[0].Version.Should().Be(1);
-        scripts[0].ScriptName.Should().Be("V001__Init.sql");
+        scripts[0].ScriptName.Should().Be("V001__Init.up.sql");
         scripts[0].Description.Should().Be("Init");
         scripts[0].Sql.Should().Be("CREATE TABLE test;");
+        scripts[0].DownScriptName.Should().Be("V001__Init.down.sql");
+        scripts[0].DownSql.Should().Be("DROP TABLE test;");
         scripts[1].Version.Should().Be(2);
-        scripts[1].ScriptName.Should().Be("V002__Create_users_table.sql");
+        scripts[1].ScriptName.Should().Be("V002__Create_users_table.up.sql");
         scripts[1].Description.Should().Be("Create users table");
+        scripts[1].DownScriptName.Should().Be("V002__Create_users_table.down.sql");
+        scripts[1].DownSql.Should().Be("DROP TABLE users;");
     }
 
     [Fact]
@@ -91,6 +95,55 @@ public class FileSystemSqlScriptsProviderTests : IDisposable
         // Assert
         act.Should().Throw<InvalidOperationException>()
             .WithMessage("Invalid migration file name 'V.sql'.");
+    }
+
+    [Fact]
+    public void GetMigrationScripts_WithMissingDownFile_ThrowsInvalidOperationException()
+    {
+        // Arrange
+        File.WriteAllText(Path.Combine(_tempDirectory, "V001__Init.up.sql"), "CREATE TABLE test;");
+
+        var provider = new FileSystemSqlScriptsProvider(_tempDirectory);
+
+        // Act
+        Action act = () => provider.GetMigrationScripts();
+
+        // Assert
+        act.Should().Throw<InvalidOperationException>()
+            .WithMessage("*V001*down-migration*");
+    }
+
+    [Fact]
+    public void GetMigrationScripts_WithMissingUpFile_ThrowsInvalidOperationException()
+    {
+        // Arrange
+        File.WriteAllText(Path.Combine(_tempDirectory, "V001__Init.down.sql"), "DROP TABLE test;");
+
+        var provider = new FileSystemSqlScriptsProvider(_tempDirectory);
+
+        // Act
+        Action act = () => provider.GetMigrationScripts();
+
+        // Assert
+        act.Should().Throw<InvalidOperationException>()
+            .WithMessage("*V001*up-migration*");
+    }
+
+    [Fact]
+    public void GetMigrationScripts_WithMismatchedDescriptions_ThrowsInvalidOperationException()
+    {
+        // Arrange
+        File.WriteAllText(Path.Combine(_tempDirectory, "V001__Init.up.sql"), "CREATE TABLE test;");
+        File.WriteAllText(Path.Combine(_tempDirectory, "V001__Different.down.sql"), "DROP TABLE test;");
+
+        var provider = new FileSystemSqlScriptsProvider(_tempDirectory);
+
+        // Act
+        Action act = () => provider.GetMigrationScripts();
+
+        // Assert
+        act.Should().Throw<InvalidOperationException>()
+            .WithMessage("*V001*description mismatch*");
     }
 
     [Fact]
