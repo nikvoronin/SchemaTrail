@@ -46,7 +46,6 @@ internal static class MigrationFilePairing
                 }
 
                 entry.DownFileName = match.FileName;
-                entry.DownDescription = match.Description;
                 entry.DownSql = match.Sql;
             }
         }
@@ -64,13 +63,6 @@ internal static class MigrationFilePairing
                 throw new InvalidOperationException(
                     $"Migration V{entry.Version:D3} ('{entry.UpFileName}') is missing "
                     + "its down-migration ('.down.sql') file." );
-            }
-
-            if (!string.Equals( entry.UpDescription, entry.DownDescription, StringComparison.Ordinal )) {
-                throw new InvalidOperationException(
-                    $"Migration V{entry.Version:D3} description mismatch: up-migration "
-                    + $"'{entry.UpFileName}' has description '{entry.UpDescription}', "
-                    + $"but down-migration '{entry.DownFileName}' has description '{entry.DownDescription}'." );
             }
 
             scripts.Add(
@@ -93,7 +85,6 @@ internal static class MigrationFilePairing
         public string? UpDescription;
         public string? UpSql;
         public string? DownFileName;
-        public string? DownDescription;
         public string? DownSql;
     }
 }

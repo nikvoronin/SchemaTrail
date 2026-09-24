@@ -117,6 +117,8 @@ Examples:
 
 Use monotonically increasing integer versions. Never reuse or rewrite a version that has already been applied.
 
+The `{version}` must match between a migration's `.up.sql` and `.down.sql` files — that's how they're paired. The `{description}` does not have to match; SchemaTrail always uses the up file's description as the migration's description. Keeping them identical (as in the examples above) is still the recommended convention for readability.
+
 ## Example migration
 
 `V002__Create_users_table.up.sql`:

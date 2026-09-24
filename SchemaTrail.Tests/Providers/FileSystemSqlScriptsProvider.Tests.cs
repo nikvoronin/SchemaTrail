@@ -130,7 +130,7 @@ public class FileSystemSqlScriptsProviderTests : IDisposable
     }
 
     [Fact]
-    public void GetMigrationScripts_WithMismatchedDescriptions_ThrowsInvalidOperationException()
+    public void GetMigrationScripts_WithMismatchedDescriptions_UsesUpDescription()
     {
         // Arrange
         File.WriteAllText(Path.Combine(_tempDirectory, "V001__Init.up.sql"), "CREATE TABLE test;");
@@ -139,11 +139,13 @@ public class FileSystemSqlScriptsProviderTests : IDisposable
         var provider = new FileSystemSqlScriptsProvider(_tempDirectory);
 
         // Act
-        Action act = () => provider.GetMigrationScripts();
+        var scripts = provider.GetMigrationScripts();
 
         // Assert
-        act.Should().Throw<InvalidOperationException>()
-            .WithMessage("*V001*description mismatch*");
+        scripts.Should().HaveCount(1);
+        scripts[0].Description.Should().Be("Init");
+        scripts[0].DownScriptName.Should().Be("V001__Different.down.sql");
+        scripts[0].DownSql.Should().Be("DROP TABLE test;");
     }
 
     [Fact]
