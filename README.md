@@ -29,15 +29,16 @@ Because sometimes you do not need a giant migration platform.
 
 ## Features
 
-- Plain SQL migration scripts
+- Plain SQL migration scripts, paired with down-migration scripts
 - Ordered version-based execution
 - PostgreSQL advisory lock to prevent concurrent migration runners
 - Applied migrations table
 - Migration run history table
+- Automatic rollback to the pre-run state if a migration fails mid-batch
+- Manual revert to an arbitrary target version
 - Recovery of unfinished migration runs after unexpected process termination
 - Validation of already applied migrations against the current build
-- Checksum verification to detect migration drift
-- Transactional execution of each individual migration
+- Transactional execution of each individual migration (and its rollback)
 
 ## Non-goals
 
@@ -67,6 +68,10 @@ For each migration, it:
 8. records the migration as applied;
 9. marks the migration run as `success` or `failed`.
 
+If a migration fails, SchemaTrail automatically reverts every migration that was applied *during
+that run*, in reverse order, using each migration's down script — restoring the database to the
+state it was in before the run started. See [Rollback](#rollback).
+
 This gives you both:
 
 - a durable record of schema state;
@@ -84,29 +89,39 @@ Then configure PostgreSQL and register the services in DI.
 
 ## Migration naming convention
 
+Every migration ships as a pair of files: an `up` script that applies the change, and a `down`
+script that reverts it. Both are **required** — SchemaTrail fails fast at startup if either side
+of a version is missing.
+
 A typical naming convention is:
 
 ```text
-V001__Create_users.sql
-V002__Add_email_index.sql
-V003__Create_audit_log.sql
+V001__Create_users.up.sql
+V001__Create_users.down.sql
+V002__Add_email_index.up.sql
+V002__Add_email_index.down.sql
 ```
 
 Recommended format:
 
 ```text
-V{version}__{description}.sql
+V{version}__{description}.up.sql
+V{version}__{description}.down.sql
 ```
 
 Examples:
 
-- V001__Init.sql
-- V002__Create_users_table.sql
-- V003__Add_order_status_index.sql
+- V001__Init.up.sql / V001__Init.down.sql
+- V002__Create_users_table.up.sql / V002__Create_users_table.down.sql
+- V003__Add_order_status_index.up.sql / V003__Add_order_status_index.down.sql
 
 Use monotonically increasing integer versions. Never reuse or rewrite a version that has already been applied.
 
+The `{version}` must match between a migration's `.up.sql` and `.down.sql` files — that's how they're paired. The `{description}` does not have to match; SchemaTrail always uses the up file's description as the migration's description. Keeping them identical (as in the examples above) is still the recommended convention for readability.
+
 ## Example migration
+
+`V002__Create_users_table.up.sql`:
 
 ```sql
 create table if not exists users
@@ -118,6 +133,14 @@ create table if not exists users
 
 create unique index if not exists ix_users_email
     on users (email);
+```
+
+`V002__Create_users_table.down.sql`:
+
+```sql
+drop index if exists ix_users_email;
+
+drop table if exists users;
 ```
 
 ## Basic registration
@@ -172,6 +195,31 @@ await using (var scope = app.Services.CreateAsyncScope()) {
 await app.RunAsync();
 ```
 
+## Rollback
+
+SchemaTrail can undo applied migrations using their down scripts, in two ways:
+
+- **Automatic**, on failure: if a migration fails during `ApplyAsync`, every migration applied
+  during that same call is reverted, in reverse order, before the original exception is rethrown.
+  This restores the database to the state it was in before the run started. If a revert itself
+  fails, the original error and the revert error are both surfaced together (as an
+  `AggregateException`), since the database may then be left in a partially reverted state that
+  needs manual inspection.
+- **Manual**, on demand: call `RevertAsync` to revert applied migrations down to an arbitrary
+  target version.
+
+```csharp
+await using (var scope = app.Services.CreateAsyncScope()) {
+    var migrationsApplier = scope.ServiceProvider.GetRequiredService<IMigrationsApplier>();
+
+    // Reverts every applied migration with a version greater than 2,
+    // i.e. leaves the database at the state produced by V002.
+    await migrationsApplier.RevertAsync( targetVersion: 2, app.Lifetime.ApplicationStopping );
+}
+```
+
+Each reverted migration is recorded in the migration run history with a `rolled_back` status.
+
 ## Register scripts for embedded provider
 
 Just set file mask in `.csproj`
@@ -195,7 +243,6 @@ Typical fields:
 - version
 - script name
 - description
-- checksum
 - applied at
 
 ### 2. Migration runs
@@ -208,8 +255,8 @@ Typical fields:
 - version
 - script name
 - description
-- checksum
-- status
+- status (`running`, `success`, `failed`, or `rolled_back`)
+- direction (`up` or `down`)
 - started at
 - completed at
 - duration
@@ -226,9 +273,9 @@ If the process crashes after starting a migration run but before completing it, 
 
 Typical recovery behavior:
 
-- if the migration was actually applied and matches the recorded metadata, the dangling run can be marked as `success`;
-- if it was not applied, the dangling run can be marked as `failed`;
-- stale competing runs for the same migration can also be marked as `failed`.
+- for a dangling `up` run: if the migration was actually applied and matches the recorded metadata, it can be marked as `success`; if it was not applied, it can be marked as `failed`;
+- for a dangling `down` run: if the migration is no longer present in the applied-migrations record, the revert actually went through and it can be marked as `rolled_back`; if it is still present, the revert never took effect and it can be marked as `failed`;
+- stale competing runs for the same migration and direction can also be marked as `failed`.
 
 This gives you a much clearer operational history than a single applied-migrations table alone.
 
@@ -240,14 +287,12 @@ That includes checking:
 
 - version existence;
 - script name;
-- description;
-- checksum.
+- description.
 
 This protects against dangerous situations such as:
 
 - running an older build against a newer database;
-- renaming already applied migration files;
-- silently editing SQL in a migration that has already been applied.
+- renaming already applied migration files.
 
 If a mismatch is detected, SchemaTrail fails fast.
 
@@ -265,8 +310,8 @@ The result is a smaller and simpler library.
 
 ## Recommended workflow
 
-1. Create a new SQL file with the next version number.
-2. Write the schema change in plain PostgreSQL SQL.
+1. Create a new pair of SQL files (`.up.sql` / `.down.sql`) with the next version number.
+2. Write the schema change in plain PostgreSQL SQL, and its exact reverse in the down script.
 3. Review the migration like regular source code.
 4. Merge and deploy the application.
 5. Let SchemaTrail apply pending migrations at startup or during a deployment step.
@@ -278,7 +323,8 @@ The result is a smaller and simpler library.
 - Never reuse a version number.
 - Prefer additive changes where possible.
 - Make destructive changes explicit and reviewed.
-- Test migrations against a real PostgreSQL instance before production rollout.
+- Keep the down script an exact, tested inverse of the up script.
+- Test migrations, including their rollback, against a real PostgreSQL instance before production rollout.
 
 ## Example project structure
 
@@ -287,9 +333,12 @@ src/
   MyApp/
     Program.cs
     Migrations/
-      V001__Init.sql
-      V002__Create_users_table.sql
-      V003__Add_email_index.sql
+      V001__Init.up.sql
+      V001__Init.down.sql
+      V002__Create_users_table.up.sql
+      V002__Create_users_table.down.sql
+      V003__Add_email_index.up.sql
+      V003__Add_email_index.down.sql
 ```
 
 ## Logging
@@ -299,6 +348,7 @@ src/
 - migration started;
 - migration succeeded;
 - migration failed;
+- migration reverted, automatically or manually;
 - dangling migration runs recovered;
 - missing run records during reconciliation.
 

@@ -39,7 +39,7 @@ public sealed partial class MigrationRunService : IMigrationRunService
                     x.Version,
                     x.ScriptName,
                     x.Description,
-                    x.Checksum,
+                    x.Direction,
                     x.StartedAt ) )
             .ToListAsync( token );
 
@@ -85,15 +85,58 @@ public sealed partial class MigrationRunService : IMigrationRunService
     {
         var now = DateTimeOffset.UtcNow;
 
-        if (TryFindSuccessCandidate( 
-                version, 
-                runs, 
-                appliedMigrations, 
-                out var applied, 
+        var upRuns = runs
+            .Where( x => x.Direction == MigrationRunDirections.Up )
+            .ToArray();
+        var downRuns = runs
+            .Where( x => x.Direction == MigrationRunDirections.Down )
+            .ToArray();
+
+        foreach (var action in BuildUpRecoveryActions( version, upRuns, appliedMigrations, now ))
+            yield return action;
+
+        foreach (var action in BuildDownRecoveryActions( version, downRuns, appliedMigrations, now ))
+            yield return action;
+    }
+
+    /// <summary>
+    /// Reconciles dangling "up" (apply) runs: a run is presumed to have succeeded before the
+    /// crash if the current applied-migrations record for this version matches its metadata,
+    /// since a successful apply is what adds that record.
+    /// </summary>
+    private static IEnumerable<RecoveryAction> BuildUpRecoveryActions(
+        int version,
+        IReadOnlyList<MigrationRunRecord> runs,
+        IReadOnlyDictionary<int, AppliedMigration> appliedMigrations,
+        DateTimeOffset now )
+    {
+        if (runs.Count == 0) yield break;
+
+        if (TryFindAppliedMatch(
+                version,
+                runs,
+                appliedMigrations,
+                out var applied,
                 out var successCandidate ))
         {
-            foreach (var action 
-                in BuildMatchedActions( runs, successCandidate, applied, now ))
+            var successCompletedAt =
+                applied.AppliedAt >= successCandidate.StartedAt
+                    ? applied.AppliedAt
+                    : now;
+
+            yield return new RecoveryAction(
+                successCandidate.Id,
+                MigrationRunStatuses.Success,
+                successCompletedAt,
+                SafeDuration( successCompletedAt, successCandidate.StartedAt ),
+                "Recovered on startup after unexpected process termination." );
+
+            foreach (var action
+                in BuildFailedActions(
+                    runs.Where( x => x.Id != successCandidate.Id ),
+                    now,
+                    "Marked as failed during recovery because another run "
+                    + "for the same migration was reconciled as successful." ))
                 yield return action;
 
             yield break;
@@ -108,7 +151,51 @@ public sealed partial class MigrationRunService : IMigrationRunService
             yield return action;
     }
 
-    private static bool TryFindSuccessCandidate(
+    /// <summary>
+    /// Reconciles dangling "down" (revert) runs: a run is presumed to have succeeded before the
+    /// crash if the version is no longer present in the applied-migrations record, since a
+    /// successful revert is what removes that record.
+    /// </summary>
+    private static IEnumerable<RecoveryAction> BuildDownRecoveryActions(
+        int version,
+        IReadOnlyList<MigrationRunRecord> runs,
+        IReadOnlyDictionary<int, AppliedMigration> appliedMigrations,
+        DateTimeOffset now )
+    {
+        if (runs.Count == 0) yield break;
+
+        if (!appliedMigrations.ContainsKey( version )) {
+            // `runs` is already ordered most-recent-first by the caller.
+            var successCandidate = runs[0];
+
+            yield return new RecoveryAction(
+                successCandidate.Id,
+                MigrationRunStatuses.RolledBack,
+                now,
+                SafeDuration( now, successCandidate.StartedAt ),
+                "Recovered on startup after unexpected process termination." );
+
+            foreach (var action
+                in BuildFailedActions(
+                    runs.Where( x => x.Id != successCandidate.Id ),
+                    now,
+                    "Marked as failed during recovery because another run "
+                    + "for the same migration was reconciled as rolled back." ))
+                yield return action;
+
+            yield break;
+        }
+
+        foreach (var action
+            in BuildFailedActions(
+                runs,
+                now,
+                "Recovered on startup after unexpected process termination "
+                + "before the down-migration completed." ))
+            yield return action;
+    }
+
+    private static bool TryFindAppliedMatch(
         int version,
         IEnumerable<MigrationRunRecord> runs,
         IReadOnlyDictionary<int, AppliedMigration> appliedMigrations,
@@ -122,41 +209,12 @@ public sealed partial class MigrationRunService : IMigrationRunService
 
         var name = applied.ScriptName;
         var description = applied.Description;
-        var checksum = applied.Checksum;
 
         successCandidate = runs.FirstOrDefault( x =>
             string.Equals( x.ScriptName, name, StringComparison.Ordinal )
-            && string.Equals( x.Description, description, StringComparison.Ordinal ) 
-            && string.Equals( x.Checksum, checksum, StringComparison.Ordinal ) );
+            && string.Equals( x.Description, description, StringComparison.Ordinal ) );
 
         return successCandidate is not null;
-    }
-
-    private static IEnumerable<RecoveryAction> BuildMatchedActions(
-        IReadOnlyList<MigrationRunRecord> runs,
-        MigrationRunRecord successCandidate,
-        AppliedMigration applied,
-        DateTimeOffset now )
-    {
-        var successCompletedAt =
-            applied.AppliedAt >= successCandidate.StartedAt
-                ? applied.AppliedAt
-                : now;
-
-        yield return new RecoveryAction(
-            successCandidate.Id,
-            MigrationRunStatuses.Success,
-            successCompletedAt,
-            SafeDuration( successCompletedAt, successCandidate.StartedAt ),
-            "Recovered on startup after unexpected process termination." );
-
-        foreach (var action
-            in BuildFailedActions(
-                runs.Where( x => x.Id != successCandidate.Id ),
-                now,
-                "Marked as failed during recovery because another run "
-                + "for the same migration was reconciled as successful." ))
-            yield return action;
     }
 
     private static IEnumerable<RecoveryAction> BuildFailedActions(

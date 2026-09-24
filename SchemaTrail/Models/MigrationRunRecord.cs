@@ -7,5 +7,5 @@ public sealed record MigrationRunRecord(
     int Version,
     string ScriptName,
     string Description,
-    string Checksum,
+    string Direction,
     DateTimeOffset StartedAt );

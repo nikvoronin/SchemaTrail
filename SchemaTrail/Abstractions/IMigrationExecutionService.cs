@@ -56,4 +56,17 @@ public interface IMigrationExecutionService
         MigrationsDbContext context,
         SqlScriptMigration script,
         CancellationToken token );
+
+    /// <summary>
+    /// Executes a single SQL down-migration inside a transaction and
+    /// removes the migration from the applied migrations record.
+    /// </summary>
+    /// <param name="context">The database context used to execute the down-migration.</param>
+    /// <param name="script">The migration whose down-migration script is executed.</param>
+    /// <param name="token">The cancellation token.</param>
+    /// <returns>The UTC timestamp when the migration was reverted.</returns>
+    Task<DateTimeOffset> RevertSingleMigrationAsync(
+        MigrationsDbContext context,
+        SqlScriptMigration script,
+        CancellationToken token );
 }

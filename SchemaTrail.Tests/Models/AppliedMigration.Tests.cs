@@ -14,17 +14,15 @@ public class AppliedMigrationTests
         int version = 1;
         string scriptName = "V001__Init.sql";
         string description = "Init";
-        string checksum = "checksum123";
         var appliedAt = DateTimeOffset.UtcNow;
 
         // Act
-        var appliedMigration = new AppliedMigration(version, scriptName, description, checksum, appliedAt);
+        var appliedMigration = new AppliedMigration(version, scriptName, description, appliedAt);
 
         // Assert
         appliedMigration.Version.Should().Be(version);
         appliedMigration.ScriptName.Should().Be(scriptName);
         appliedMigration.Description.Should().Be(description);
-        appliedMigration.Checksum.Should().Be(checksum);
         appliedMigration.AppliedAt.Should().Be(appliedAt);
     }
 }

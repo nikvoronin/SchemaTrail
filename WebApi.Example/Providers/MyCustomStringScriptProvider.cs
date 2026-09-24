@@ -23,13 +23,17 @@ internal class MyCustomStringScriptProvider : ISqlScriptsProvider
 
     private SqlScriptMigration[] _scripts = [
         new SqlScriptMigration(
-            1, "Initialize",
+            1, "Initialize.up",
             "Initialize app schema",
             """
             create schema if not exists app;
+            """,
+            "Initialize.down",
+            """
+            drop schema if exists app cascade;
             """),
         new SqlScriptMigration(
-            2, "Create users table",
+            2, "Create users table.up",
             "Create users table",
             """
             create table if not exists app.users
@@ -41,6 +45,12 @@ internal class MyCustomStringScriptProvider : ISqlScriptsProvider
 
             create unique index if not exists ix_users_email
                 on app.users (email);
+            """,
+            "Create users table.down",
+            """
+            drop index if exists app.ix_users_email;
+
+            drop table if exists app.users;
             """),
     ];
 }

@@ -38,10 +38,10 @@ public partial class FileSystemSqlScriptsProvider : ISqlScriptsProvider
             "V*.sql",
             SearchOption.TopDirectoryOnly );
 
-        var scripts = new List<SqlScriptMigration>();
+        var matches = new List<MigrationFileMatch>();
 
-        foreach (var fileName in files) {
-            var fileNameOnly = Path.GetFileName(fileName);
+        foreach (var filePath in files) {
+            var fileNameOnly = Path.GetFileName( filePath );
             var match = _fileNameRegex.Match( fileNameOnly );
 
             if (!match.Success) {
@@ -53,15 +53,17 @@ public partial class FileSystemSqlScriptsProvider : ISqlScriptsProvider
             var description =
                 match.Groups["description"].Value
                 .Replace( '_', ' ' );
-            var sql = ReadToEndRequiredScript( fileName );
+            var isUp = string.Equals(
+                match.Groups["direction"].Value,
+                "up",
+                StringComparison.OrdinalIgnoreCase );
+            var sql = ReadToEndRequiredScript( filePath );
 
-            scripts.Add(
-                new SqlScriptMigration(
-                    version, 
-                    fileNameOnly, 
-                    description,
-                    sql) );
+            matches.Add(
+                new MigrationFileMatch( version, isUp, fileNameOnly, description, sql ) );
         }
+
+        var scripts = MigrationFilePairing.Build( matches );
 
         return [.. scripts.OrderBy( x => x.Version )];
     }
@@ -72,8 +74,8 @@ public partial class FileSystemSqlScriptsProvider : ISqlScriptsProvider
 
     private readonly string _directoryPath;
 
-    [GeneratedRegex( 
-        @"^V(?<version>\d+)__(?<description>.+)\.sql$", 
+    [GeneratedRegex(
+        @"^V(?<version>\d+)__(?<description>.+)\.(?<direction>up|down)\.sql$",
         RegexOptions.Compiled )]
     private static partial Regex CreateFileNameRegex();
     private static readonly Regex _fileNameRegex = CreateFileNameRegex();

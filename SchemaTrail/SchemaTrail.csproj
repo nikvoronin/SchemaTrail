@@ -12,7 +12,7 @@
 
   <PropertyGroup>
     <PackageId>SchemaTrail</PackageId>
-    <Version>0.1.5</Version>
+    <Version>0.2.0</Version>
     <Authors>Nikolai Voronin</Authors>
     <Description>A tiny, PostgreSQL-only SQL migration library for .NET.</Description>
 

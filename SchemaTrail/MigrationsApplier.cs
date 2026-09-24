@@ -3,7 +3,9 @@ using Microsoft.Extensions.Logging;
 using SchemaTrail.Abstractions;
 using SchemaTrail.Models;
 using System;
+using System.Collections.Generic;
 using System.Diagnostics;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -79,6 +81,8 @@ public sealed class MigrationsApplier : IMigrationsApplier
                 scripts,
                 appliedMigrations );
 
+            var appliedThisRun = new List<SqlScriptMigration>();
+
             foreach (var script in scripts) {
                 if (appliedMigrations.ContainsKey( script.Version )) {
                     continue;
@@ -92,6 +96,7 @@ public sealed class MigrationsApplier : IMigrationsApplier
                 var runId = await _migrationRunService.InsertStartedAsync(
                     auditContext,
                     script,
+                    MigrationRunDirections.Up,
                     token );
 
                 var stopwatch = Stopwatch.StartNew();
@@ -124,8 +129,9 @@ public sealed class MigrationsApplier : IMigrationsApplier
                             script.Version,
                             script.ScriptName,
                             script.Description,
-                            script.Checksum,
                             appliedAt );
+
+                    appliedThisRun.Add( script );
                 }
                 catch (Exception ex) {
                     stopwatch.Stop();
@@ -146,6 +152,41 @@ public sealed class MigrationsApplier : IMigrationsApplier
                         script.ScriptName,
                         stopwatch.ElapsedMilliseconds );
 
+                    if (appliedThisRun.Count > 0) {
+                        _logger.LogWarning(
+                            "Rolling back {Count} migration(s) applied during this run, "
+                            + "starting from V{Version:D3}",
+                            appliedThisRun.Count,
+                            appliedThisRun[^1].Version );
+
+                        try {
+                            await RevertMigrationsAsync(
+                                migrationContext,
+                                auditContext,
+                                Enumerable.Reverse( appliedThisRun ).ToArray(),
+                                appliedMigrations,
+                                token );
+
+                            _logger.LogInformation(
+                                "Automatic rollback completed; database restored to its "
+                                + "state before this run" );
+                        }
+                        catch (Exception revertEx) {
+                            _logger.LogCritical(
+                                revertEx,
+                                "Automatic rollback failed after migration V{Version:D3} failed; "
+                                + "database may be in a partially reverted state",
+                                script.Version );
+
+                            throw new AggregateException(
+                                $"Migration V{script.Version:D3}: {script.ScriptName} failed and "
+                                + "automatic rollback also failed. The database may be in a "
+                                + "partially reverted state and requires manual inspection.",
+                                ex,
+                                revertEx );
+                        }
+                    }
+
                     throw;
                 }
             }
@@ -155,6 +196,150 @@ public sealed class MigrationsApplier : IMigrationsApplier
         finally {
             await ReleaseMigrationLockSafeAsync( migrationContext );
             await migrationContext.Database.CloseConnectionAsync();
+        }
+    }
+
+    /// <inheritdoc />
+    public async Task RevertAsync( int targetVersion, CancellationToken token )
+    {
+        ArgumentOutOfRangeException.ThrowIfNegative( targetVersion );
+
+        token.ThrowIfCancellationRequested();
+
+        using var logScope = _logger.BeginScope( "Reverting migrations" );
+
+        var scripts = _scriptsProvider.GetMigrationScripts();
+        var scriptsByVersion = scripts.ToDictionary( x => x.Version );
+
+        await using var migrationContext =
+            await _dbContextFactory.CreateDbContextAsync( token );
+        await using var auditContext =
+            await _dbContextFactory.CreateDbContextAsync( token );
+
+        await migrationContext.Database.OpenConnectionAsync( token );
+
+        try {
+            await AcquireMigrationLockAsync( migrationContext, token );
+
+            await _migrationExecutionService.EnsureInfrastructureTablesExistAsync(
+                migrationContext,
+                token );
+
+            var appliedMigrations =
+                await _migrationExecutionService.LoadAppliedMigrationsAsync(
+                    migrationContext,
+                    token );
+
+            await _migrationRunService.RecoverDanglingRunsAsync(
+                auditContext,
+                appliedMigrations,
+                token );
+
+            _migrationExecutionService.ValidateAlreadyAppliedMigrations(
+                scripts,
+                appliedMigrations );
+
+            var versionsToRevert = appliedMigrations.Values
+                .Where( x => x.Version > targetVersion )
+                .OrderByDescending( x => x.Version )
+                .Select( x => scriptsByVersion[x.Version] )
+                .ToArray();
+
+            if (versionsToRevert.Length == 0) {
+                _logger.LogInformation(
+                    "Nothing to revert; no applied migration above V{TargetVersion:D3}",
+                    targetVersion );
+
+                return;
+            }
+
+            _logger.LogInformation(
+                "Reverting {Count} migration(s) down to V{TargetVersion:D3}",
+                versionsToRevert.Length,
+                targetVersion );
+
+            await RevertMigrationsAsync(
+                migrationContext,
+                auditContext,
+                versionsToRevert,
+                appliedMigrations,
+                token );
+
+            _logger.LogInformation( "Revert process completed successfully" );
+        }
+        finally {
+            await ReleaseMigrationLockSafeAsync( migrationContext );
+            await migrationContext.Database.CloseConnectionAsync();
+        }
+    }
+
+    private async Task RevertMigrationsAsync(
+        MigrationsDbContext migrationContext,
+        MigrationsDbContext auditContext,
+        IReadOnlyList<SqlScriptMigration> versionsDescending,
+        Dictionary<int, AppliedMigration> appliedMigrations,
+        CancellationToken token )
+    {
+        foreach (var script in versionsDescending) {
+            _logger.LogInformation(
+                "Reverting migration V{Version:D3}: {ScriptName}",
+                script.Version,
+                script.ScriptName );
+
+            var runId = await _migrationRunService.InsertStartedAsync(
+                auditContext,
+                script,
+                MigrationRunDirections.Down,
+                token );
+
+            var stopwatch = Stopwatch.StartNew();
+
+            try {
+                var revertedAt = await _migrationExecutionService.RevertSingleMigrationAsync(
+                    migrationContext,
+                    script,
+                    token );
+
+                stopwatch.Stop();
+
+                await _migrationRunService.TryCompleteAsync(
+                    auditContext,
+                    runId,
+                    MigrationRunStatuses.RolledBack,
+                    revertedAt,
+                    stopwatch.Elapsed,
+                    errorText: null,
+                    token );
+
+                _logger.LogInformation(
+                    "Migration V{Version:D3}: {ScriptName} reverted successfully in {DurationMs} ms",
+                    script.Version,
+                    script.ScriptName,
+                    stopwatch.ElapsedMilliseconds );
+
+                appliedMigrations.Remove( script.Version );
+            }
+            catch (Exception ex) {
+                stopwatch.Stop();
+
+                await _migrationRunService.TryCompleteAsync(
+                    auditContext,
+                    runId,
+                    MigrationRunStatuses.Failed,
+                    DateTimeOffset.UtcNow,
+                    stopwatch.Elapsed,
+                    ex.ToString(),
+                    token );
+
+                _logger.LogError(
+                    ex,
+                    "Reverting migration V{Version:D3}: {ScriptName} failed after {DurationMs} ms",
+                    script.Version,
+                    script.ScriptName,
+                    stopwatch.ElapsedMilliseconds );
+
+                throw;
+            }
         }
     }
 

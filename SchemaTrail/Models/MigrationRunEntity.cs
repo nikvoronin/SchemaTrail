@@ -12,9 +12,9 @@ public sealed class MigrationRunEntity
 
     public required string Description { get; set; }
 
-    public required string Checksum { get; set; }
-
     public required string Status { get; set; }
+
+    public required string Direction { get; set; }
 
     public required DateTimeOffset StartedAt { get; set; }
 

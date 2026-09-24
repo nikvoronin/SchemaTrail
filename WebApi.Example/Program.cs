@@ -12,7 +12,7 @@ var builder = WebApplication.CreateBuilder( args );
 var connectionString =
     builder.Configuration.GetConnectionString( "DefaultConnection" )
     ?? throw new InvalidOperationException(
-        "Connection string 'StateCache' is not configured." );
+        "Connection string is not configured.");
 
 builder.Services
     .AddPooledDbContextFactory<MigrationsDbContext>( options => {

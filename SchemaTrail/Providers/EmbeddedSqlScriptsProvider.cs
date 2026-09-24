@@ -66,14 +66,16 @@ public partial class EmbeddedSqlScriptsProvider : ISqlScriptsProvider
             .OrderBy( x => x, StringComparer.Ordinal )
             .ToArray();
 
-        var scripts = new List<SqlScriptMigration>( resourceNames.Length );
+        var matches = new List<MigrationFileMatch>( resourceNames.Length );
 
         foreach (var resourceName in resourceNames) {
             var sql = ReadToEndRequiredScript( resourceName );
 
-            scripts.Add(
-                BuildMigrationScript(resourceName, sql) );
+            matches.Add(
+                BuildMigrationFileMatch( resourceName, sql ) );
         }
+
+        var scripts = MigrationFilePairing.Build( matches );
 
         ValidateScripts( scripts );
 
@@ -93,7 +95,7 @@ public partial class EmbeddedSqlScriptsProvider : ISqlScriptsProvider
         return reader.ReadToEnd();
     }
 
-    private SqlScriptMigration BuildMigrationScript(
+    private MigrationFileMatch BuildMigrationFileMatch(
         string resourceName,
         string sql)
     {
@@ -120,12 +122,12 @@ public partial class EmbeddedSqlScriptsProvider : ISqlScriptsProvider
         var description =
             match.Groups["description"].Value
             .Replace( '_', ' ' );
+        var isUp = string.Equals(
+            match.Groups["direction"].Value,
+            "up",
+            StringComparison.OrdinalIgnoreCase );
 
-        return new SqlScriptMigration(
-            version,
-            fileName,
-            description,
-            sql );
+        return new MigrationFileMatch( version, isUp, fileName, description, sql );
     }
 
     private static void ValidateScripts( 
@@ -163,7 +165,7 @@ public partial class EmbeddedSqlScriptsProvider : ISqlScriptsProvider
     }
 
     [GeneratedRegex(
-        @"^V(?<version>\d+)__(?<description>[A-Za-z0-9_\-]+)\.sql$",
+        @"^V(?<version>\d+)__(?<description>[A-Za-z0-9_\-]+)\.(?<direction>up|down)\.sql$",
         RegexOptions.Compiled
         | RegexOptions.CultureInvariant )]
     private static partial Regex EmbeddedFileNameRegex();
